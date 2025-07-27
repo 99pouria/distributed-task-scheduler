@@ -1,0 +1,53 @@
+version: '3.8'
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management 
+    container_name: rabbitmq_scheduler
+    ports:
+      - "5672:5672" 
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "status" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: redis_scheduler
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--requirepass", "password"]
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "password", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - redis_data:/data
+      
+  scheduler:
+    image: scheduler
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scheduler-application
+    ports:
+      - "8080:8080"
+    depends_on:
+      - rabbitmq
+      - redis
+    environment:
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672/
+      - HTTP_ADDR=:8080
+      - WORKER_COUNT=5
+      - REDIS_URL=redis:6379
+      - REDIS_PASSWORD=password
+    restart: on-failure
+
+volumes:
+  redis_data:
+    driver: local
